@@ -1,0 +1,68 @@
+{
+  "name": "dsh-youreyes",
+  "version": "0.1.0",
+  "description": "Eyes for text-only DeepSeek: a vision toolkit that gives any DSH conversation image understanding via OpenAI-compatible VLM endpoints, Gemini API, or local Ollama — image placeholders, a model-invokable vision tool, multi-image OCR/region/compare modes, evidence memory, and a polished client panel.",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "lib/types/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/types/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "types": "./lib/types/client.d.ts",
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "lib",
+    "src",
+    "README.md",
+    "LICENSE"
+  ],
+  "keywords": [
+    "dsh",
+    "deepseek",
+    "plugin",
+    "vision",
+    "image",
+    "multimodal",
+    "ocr",
+    "vlm",
+    "gemini",
+    "ollama"
+  ],
+  "dsh": {
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-runtime",
+        "@deepseek-ai/dsh-client-ui-conversation"
+      ],
+      "platform": "web"
+    }
+  },
+  "scripts": {
+    "build": "node build.mjs",
+    "test": "node --test tests/*.test.mjs"
+  },
+  "devDependencies": {
+    "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
+    "@deepseek-ai/dsh-tools": "0.1.0-rc.6",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@types/react": "^18.3.1",
+    "esbuild": "^0.24.0",
+    "react": "^18.2.0",
+    "typescript": "^5.6.0"
+  },
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/54xkeee/dsh-youreyes.git"
+  },
+  "allowScripts": {
+    "esbuild@0.24.2": true
+  }
+}
