@@ -19,23 +19,36 @@
   "files": [
     "lib",
     "src",
+    "cordis.patch.yml",
     "README.md",
     "README.zh-CN.md",
     "LICENSE"
   ],
   "keywords": [
     "dsh",
+    "dsh-plugin",
     "deepseek",
+    "deepseek-harness",
     "plugin",
     "vision",
     "image",
+    "image-understanding",
+    "image-recognition",
     "multimodal",
     "ocr",
     "vlm",
     "gemini",
-    "ollama"
+    "ollama",
+    "antigravity"
   ],
+  "engines": {
+    "node": ">=20",
+    "dsh": ">=0.1.0"
+  },
   "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
     "client": {
       "inject": [
         "@deepseek-ai/dsh-client-locale",

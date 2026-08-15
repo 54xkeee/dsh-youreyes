@@ -1,0 +1,36 @@
+# dsh-youreyes bundle patch: one insert over the profile tree.
+# The plugin row activates only when this package is installed as a profile
+# dependency (e.g. `dsh plugin add dsh-youreyes`).
+#
+# 默认策略：
+# - auto 通道优先反重力（antigravityWorkspace 等配置后）；否则 Gemini → OpenAI → Ollama
+# - 有本地 Ollama 时零配置可用；无任何 key 时快速失败并给指引
+# 所有 key/路径留空由用户按需填写；本地 Ollama / Gemini / OpenAI 兼容端点三选一即可。
+
+- insert:
+    - id: youreyes
+      name: 'dsh-youreyes'
+      config:
+        defaultChannel: auto
+        defaultModel: gemini-3.7-flash
+        # 反重力（可选；配置后成为默认识图通道，走 IDE 订阅额度，flash/pro 双档）
+        antigravityWorkspace: ''
+        antigravityProjectId: ''
+        antigravityLsExe: ''
+        antigravityWindowsHome: ''
+        antigravityBrainDir: ''
+        # OpenAI 兼容端点（可选）
+        openaiBaseUrl: https://open.bigmodel.cn/api/paas/v4
+        openaiApiKey: ''
+        openaiModel: glm-4.6v-flash
+        # Gemini API（可选）
+        geminiApiKey: ''
+        geminiModel: gemini-3.7-flash
+        # 本地 Ollama（默认自动检测）
+        autoOllama: true
+        ollamaBaseUrl: http://127.0.0.1:11434
+        ollamaModel: ''
+        # WSL 降级：fetch 失败时用 Windows curl.exe 重试
+        winCurlPath: ''
+        # 对话流识图：包装的上游 LLM（deepseek 中转 + opencode-go 全系）
+        visionUpstreams: ["deepseek", "opencode-go"]
