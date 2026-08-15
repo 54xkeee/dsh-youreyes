@@ -1,6 +1,8 @@
 # 👁️ dsh-youreyes
 
-**给纯文本 DeepSeek 一双眼睛。** 在 [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) 里粘贴图片、截图、文件路径——模型就能"看见"并回答与图片相关的问题。DeepSeek 依然是大脑，识图只是眼睛。
+**Eyes for text-only DeepSeek.** Paste images, screenshots, or file paths into [DeepSeek Harness](https://github.com/deepseek-ai/deepseek-harness) — and the model can finally "see" and answer image-related questions. DeepSeek stays the brain; vision is just the eyes.
+
+[简体中文](README.zh-CN.md)
 
 <p align="center">
   <a href="https://awesome-dsh-plugin.com"><img src="https://awesome-dsh-plugin.com/badge.svg" alt="awesome · DSH plugin" /></a>
@@ -11,56 +13,56 @@
   <a href="https://github.com/54xkeee/dsh-youreyes"><img src="https://img.shields.io/github/stars/54xkeee/dsh-youreyes?style=flat-square" alt="GitHub stars" /></a>
 </p>
 
-> **一句话**：DeepSeek 不会看图？装上它就会了——粘贴、识图、回答，三步完成。
+> **TL;DR**: DeepSeek can't see images? Install this — paste, recognize, answer. Three steps.
 
-## ✨ 为什么值得用
+## ✨ Why you'll love it
 
-| 痛点 | dsh-youreyes 的解法 |
+| Pain point | dsh-youreyes solution |
 |---|---|
-| DeepSeek 纯文本，粘贴图片直接被拒 | 包装适配器声明图片输入，图片自动转文本占位，不再报错 |
-| 别的识图插件只认自家 API | **任意 OpenAI 兼容端点** + Gemini + 本地 Ollama，你的 key 都能用 |
-| 配置麻烦、要注册一堆东西 | **本地 Ollama 零配置自动检测**；有 Gemini 免费 key 一行配置即可 |
-| 模型看到图但"忘了" | **视觉证据记忆**：识图结果写入会话，后续轮次可复用，压缩后自动恢复 |
-| 同一张图反复花钱识别 | **内容哈希缓存**：同图同问进程内只识别一次 |
-| 复杂画面识别不准 | **auto 档位分流**：先标准检查，画面复杂自动升级深度检查 |
-| WSL / 被墙环境连不上 API | **winCurl 自动降级**：fetch 失败自动走 Windows curl 重试 |
+| DeepSeek is text-only; pasting an image is rejected | Wrapper adapters claim image input; images become text placeholders automatically |
+| Other vision plugins lock you into one vendor | **Any OpenAI-compatible endpoint** + Gemini + local Ollama — your key just works |
+| Setup is a chore with registrations everywhere | **Local Ollama auto-detection, zero config**; one line for a free Gemini key |
+| The model "forgets" what it saw | **Vision evidence memory**: results persist in the session, reused across turns, restored after compaction |
+| Paying to re-recognize the same image | **Content-hash cache**: same image + same question = recognized once per process |
+| Complex images get shallow answers | **Auto detail escalation**: standard pass first, auto-upgrade to deep for complex scenes |
+| WSL / firewalled networks can't reach APIs | **winCurl fallback**: native fetch fails → automatically retries via Windows curl |
 
-## 🎯 真实效果（2026-08-15 实测，全链路真实调用）
+## 🎯 Real results (2026-08-15, full end-to-end calls)
 
-**输入**：一张橘猫照片 + `这是什么动物？它在做什么？请用中文回答。`
+**Input**: an orange cat photo + *"What animal is this and what is it doing? Answer in Chinese."*
 
-**输出（Gemini 通道）**：
+**Output (Gemini channel)**:
 > 这是一只橘色虎斑猫（橘猫）。它正四脚朝天、肚皮朝上地仰卧在黑色床单/毯子上安稳地睡觉，姿态非常放松惬意。
 
-**输出（OpenAI 兼容通道 · 通义 qwen3.7-flash）**：
+**Output (OpenAI-compatible channel · Qwen qwen3.7-flash)**:
 > 这是一只**橘猫**（或者叫橘色虎斑猫）。它正**四脚朝天地仰面躺在深色的床单（或毯子）上**。它闭着眼睛，看起来睡得很沉或很香；阳光照在它身上形成了明显的光影；四肢完全伸展，呈现出一种非常舒展、毫无防备的姿态。
 
 ```
-你粘贴图片 + 提问
-  → dsh-youreyes 把图片转成占位符，DeepSeek（大脑）看到
-  → DeepSeek 调用 vision 工具 → 通用视觉通道识图
-  → 文字证据回填 → DeepSeek 继续回答
+you paste an image + ask
+  → dsh-youreyes turns the image into a placeholder; DeepSeek (the brain) sees it
+  → DeepSeek calls the vision tool → a general VLM channel recognizes it
+  → text evidence flows back → DeepSeek continues the answer
 ```
 
-## 🚀 快速开始
+## 🚀 Quick start
 
-### 方式一：本地 Ollama（零配置，最省心）
+### Path 1: Local Ollama (zero config, most private)
 
 ```bash
-# 1. 安装 Ollama 并拉一个视觉模型
-ollama pull llama3.2-vision   # 或 llava / qwen2.5vl
-# 2. 装插件（除了 Ollama 之外什么都不需要！）
+# 1. Install Ollama and pull a vision model
+ollama pull llama3.2-vision   # or llava / qwen2.5vl
+# 2. Install the plugin (that's ALL you need — no keys!)
 dsh plugin --profile web add dsh-youreyes
-# 3. 重启 dsh web，完事
+# 3. Restart dsh web, done
 ```
 
-插件启动时自动检测本地 Ollama（`autoOllama: true` 默认开），**图片不出本机**，无 key、无注册、无费用。
+The plugin auto-detects a local Ollama at startup (`autoOllama: true` by default). **Images never leave your machine** — no key, no signup, no cost.
 
-### 方式二：Gemini API（免费额度，一行配置）
+### Path 2: Gemini API (free tier, one line of config)
 
 ```bash
 dsh plugin --profile web add dsh-youreyes
-# 然后编辑 profile 的 cordis.patch.yml，给 youreyes 加 config：
+# then add config to your profile's cordis.patch.yml:
 ```
 
 ```yaml
@@ -68,121 +70,120 @@ dsh plugin --profile web add dsh-youreyes
     - id: youreyes
       name: dsh-youreyes
       config:
-        geminiApiKey: AIza...   # 去 https://aistudio.google.com/apikey 免费申请
+        geminiApiKey: AIza...   # free key at https://aistudio.google.com/apikey
 ```
 
-### 方式三：任意 OpenAI 兼容端点（智谱 / 通义 / OpenRouter / 本地 vLLM…）
+### Path 3: Any OpenAI-compatible endpoint (Zhipu / Qwen / OpenRouter / local vLLM…)
 
 ```yaml
 - insert:
     - id: youreyes
       name: dsh-youreyes
       config:
-        openaiBaseUrl: https://open.bigmodel.cn/api/paas/v4   # 智谱
+        openaiBaseUrl: https://open.bigmodel.cn/api/paas/v4   # Zhipu
         openaiApiKey: xxx
         openaiModel: glm-4.6v-flash
 ```
 
-### 使用
+### Usage
 
-1. **面板**：会话头部点「识图」→ 添加/粘贴图片 → 填提示词 → 选模式/档位/通道 → 识别。
-2. **对话流**：模型选择器选 `DeepSeek (Vision Toolkit)`，直接粘贴图片发送——模型自动调用识图。
+1. **Panel**: click 「识图」 in the session header → add/paste images → prompt → mode/detail/channel → recognize.
+2. **In conversation**: pick `DeepSeek (Vision Toolkit)` in the model picker, paste an image and send — the model calls vision automatically.
 
-## 🧪 配置自检（验证你的通道真的能用）
+## 🧪 Verify your setup (60-second channel check)
 
-装好后，最快验证方式——直接调 HTTP 接口（`/api/youreyes/vision`），一分钟内确认通道通不通：
+After installing, hit the HTTP API to confirm the channel works:
 
 ```bash
-# 把 base64 图片发过去，看返回
 python3 - << 'EOF'
 import base64, json, urllib.request
 b64 = base64.b64encode(open('test.jpg','rb').read()).decode()
 req = urllib.request.Request('http://127.0.0.1:3080/api/youreyes/vision',
   data=json.dumps({'images':[{'image':b64,'mime':'image/jpeg'}],
-    'prompt':'图片里有什么？','channel':'auto'}).encode(),
+    'prompt':'What is in this image?','channel':'auto'}).encode(),
   headers={'content-type':'application/json'})
 print(json.loads(urllib.request.urlopen(req, timeout=120).read())['text'])
 EOF
 ```
 
-看到文字描述 = 通道已通。若报错，看下面的 Troubleshooting 表。
+Text description back = channel is live. Errors? See Troubleshooting.
 
-## ⚙️ 完整配置
+## ⚙️ Configuration
 
-| Key | 默认 | 说明 |
+| Key | Default | Description |
 |---|---|---|
-| `defaultChannel` | `auto` | 面板默认通道：`auto` / `openai` / `gemini` / `ollama` |
-| `defaultModel` | `gemini-3.7-flash` | 面板默认模型 |
-| `openaiBaseUrl` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI 兼容端点（自动追加 `/chat/completions`） |
-| `openaiApiKey` | `""` | OpenAI 兼容端点 key（或环境变量 `YOUREYES_OPENAI_API_KEY`） |
-| `openaiModel` | `glm-4.6v-flash` | OpenAI 兼容端点模型 |
-| `geminiApiKey` | `""` | Gemini API key（`AIza…` / `AQ.`） |
-| `geminiModel` | `gemini-3.7-flash` | Gemini 模型 |
-| `autoOllama` | `true` | 启动时自动检测本地 Ollama |
-| `ollamaBaseUrl` | `http://127.0.0.1:11434` | Ollama 地址 |
-| `ollamaModel` | `""` | Ollama 模型（空则自动选视觉模型） |
-| `winCurlPath` | `""` | WSL 降级：fetch 失败时用 Windows curl.exe 重试 |
-| `maxTokens` | `2048` | 视觉模型最大输出 token |
-| `timeoutMs` | `60000` | 单次请求超时 |
-| `maxImageBytes` | `8MB` | 单张图片上限 |
-| `maxImages` | `8` | 一次最多图片数 |
-| `visionUpstreams` | `["deepseek"]` | 对话流包装 provider 的上游列表 |
-| `cacheMax` | `64` | 内存 LRU 缓存条数 |
-| `allowedImageDirs` | `[]` | 非空时仅允许 `image_path` 读取这些目录 |
+| `defaultChannel` | `auto` | Panel default: `auto` / `openai` / `gemini` / `ollama` |
+| `defaultModel` | `gemini-3.7-flash` | Panel default model |
+| `openaiBaseUrl` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI-compatible endpoint (`/chat/completions` appended) |
+| `openaiApiKey` | `""` | Endpoint key (or `YOUREYES_OPENAI_API_KEY` env) |
+| `openaiModel` | `glm-4.6v-flash` | Endpoint model |
+| `geminiApiKey` | `""` | Gemini key (`AIza…` / `AQ.`) |
+| `geminiModel` | `gemini-3.7-flash` | Gemini model |
+| `autoOllama` | `true` | Auto-detect local Ollama at startup |
+| `ollamaBaseUrl` | `http://127.0.0.1:11434` | Ollama address |
+| `ollamaModel` | `""` | Ollama model (empty = auto-pick vision model) |
+| `winCurlPath` | `""` | WSL fallback: use Windows curl.exe when fetch fails |
+| `maxTokens` | `2048` | VLM max output tokens |
+| `timeoutMs` | `60000` | Request timeout |
+| `maxImageBytes` | `8MB` | Per-image limit |
+| `maxImages` | `8` | Max images per call |
+| `visionUpstreams` | `["deepseek"]` | Upstream LLM providers to wrap for conversation vision |
+| `cacheMax` | `64` | In-memory LRU cache size |
+| `allowedImageDirs` | `[]` | If set, `image_path` only reads these dirs |
 
-## 🎨 支持的后端一览
+## 🎨 Backend matrix
 
-| 场景 | baseURL | 模型示例 | 说明 |
+| Scenario | baseURL | Example models | Notes |
 |---|---|---|---|
-| **本地 Ollama（自动检测）** | `http://127.0.0.1:11434` | `llama3.2-vision` / `llava` | 零配置，图片不出本机 |
-| **智谱（免费档）** | `https://open.bigmodel.cn/api/paas/v4` | `glm-4.6v-flash` | 免费档，注册即用 |
-| **通义 / DashScope** | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3-vl-flash` | 便宜、快、无速率限制 |
-| **Gemini（免费额度）** | （内置） | `gemini-3.7-flash` | AI Studio 免费 key |
-| **OpenRouter** | `https://openrouter.ai/api/v1` | `qwen/qwen-2.5-vl-72b` | 一家 key 用遍所有模型 |
-| **本地 vLLM / 任意网关** | 你的端点 | 你的模型 | 只要说 `/chat/completions` 就行 |
+| **Local Ollama (auto)** | `http://127.0.0.1:11434` | `llama3.2-vision` / `llava` | Zero config, images stay local |
+| **Zhipu (free tier)** | `https://open.bigmodel.cn/api/paas/v4` | `glm-4.6v-flash` | Free tier, signup only |
+| **Qwen / DashScope** | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3-vl-flash` | Cheap, fast, no rate limit |
+| **Gemini (free quota)** | (built-in) | `gemini-3.7-flash` | Free AI Studio key |
+| **OpenRouter** | `https://openrouter.ai/api/v1` | `qwen/qwen-2.5-vl-72b` | One key, every model |
+| **Local vLLM / any gateway** | yours | yours | Anything speaking `/chat/completions` |
 
 ## 🔧 Troubleshooting
 
-| 症状 | 原因 & 解决 |
+| Symptom | Cause & fix |
 |---|---|
-| `gemini channel: 503 high demand` | Gemini 模型暂时过载，稍后重试或换模型 |
-| `fetch failed` 然后还是失败 | 网络不通（WSL/被墙）：配置 `winCurlPath: /mnt/c/Windows/System32/curl.exe` 走 Windows 网络栈 |
-| `401 / auth` | key 不对或已失效，检查配置 |
-| `model not found` | 模型 id 拼错，或该端点没有这个模型 |
-| 图片超过限制 | 单张 >8MB 或一次 >8 张，压缩后再试 |
-| 面板点了没反应 | 刷新浏览器页面重载客户端 bundle |
+| `gemini channel: 503 high demand` | Gemini temporarily overloaded; retry or switch model |
+| `fetch failed` (then fails again) | Network blocked (WSL/GFW): set `winCurlPath: /mnt/c/Windows/System32/curl.exe` to use the Windows network stack |
+| `401 / auth` | Wrong or expired key; check config |
+| `model not found` | Wrong model id, or the endpoint doesn't have it |
+| Image over limit | Single >8MB or >8 images; compress first |
+| Panel click does nothing | Refresh the browser to reload the client bundle |
 
-## 🔒 隐私
+## 🔒 Privacy
 
-- **默认通道**：你配置的 API 端点（OpenAI 兼容 / Gemini）。**本地 Ollama 时图片完全不出本机。**
-- **API key**：只存于配置文件，错误信息自动脱敏（`***`），绝不写入日志。
-- **图片内容**：仅在识别时发送给视觉端点；识别结果（文字）写入你的会话，可随时删除会话。
+- **Default**: images go to the channel you configure (OpenAI-compatible / Gemini). **With local Ollama, images never leave your machine.**
+- **API keys**: stored in config only; error messages are auto-redacted (`***`), never logged.
+- **Image content**: sent to the vision endpoint only for recognition; the text result is written to your session and can be deleted anytime.
 
-## 🏗️ 架构（给插件开发者）
+## 🏗️ Architecture (for plugin developers)
 
 ```
 src/
-├── index.ts        # 服务端：适配器注册、vision 工具、/api/youreyes/vision、compaction 恢复
-├── vision-core.ts  # 核心：提示词构建、响应归一、证据记录、占位符、流修复
-├── channels.ts     # 通用视觉通道：openai / gemini / ollama（含 winCurl 降级）
+├── index.ts        # server: adapter registration, vision tool, /api/youreyes/vision, compaction rehydration
+├── vision-core.ts  # core: prompt building, response normalization, evidence records, placeholders, stream repair
+├── channels.ts     # general VLM channels: openai / gemini / ollama (with winCurl fallback)
 └── client/
     ├── entry.ts
-    └── plugin.tsx  # 客户端面板（多图/粘贴/模式/档位/通道）
+    └── plugin.tsx  # client panel (multi-image / paste / mode / detail / channel)
 ```
 
-- **证据记忆**：识图结果以 `<dsh-youreyes-evidence>` 标记写入会话时间线，跨轮复用；请求流自动附带视觉记忆清单，模型可据此追问。
-- **compaction 恢复**：会话压缩后自动补回近期视觉记录。
-- **流修复**：兼容把工具前规划误报成 text 的上游路由。
-- **接口三件套**：`vision` 工具（agent 调用）、`/api/youreyes/vision`（HTTP）、包装 provider（模型选择器）。
+- **Evidence memory**: results are written into the session timeline as `<dsh-youreyes-evidence>` records, reused across turns; a vision memory manifest is attached to request streams so the model can follow up.
+- **Compaction rehydration**: recent vision records are restored after session compaction.
+- **Stream repair**: handles upstream routes that mislabel pre-tool planning as text.
+- **Three interfaces**: the `vision` tool (agent calls), `/api/youreyes/vision` (HTTP), and wrapper providers (model picker).
 
-## 🛠️ 开发
+## 🛠️ Development
 
 ```bash
 git clone https://github.com/54xkeee/dsh-youreyes
 cd dsh-youreyes
 npm install
-npm run build     # esbuild 构建 lib/index.js + lib/client.js
-npm test          # node --test
+npm run build     # esbuild → lib/index.js + lib/client.js
+npm test          # node --test (19 tests)
 ```
 
 ## 📄 License
@@ -191,5 +192,5 @@ npm test          # node --test
 
 ## 🙏 Credits
 
-- 架构与特色继承自内部项目 dsh-vision（vision-toolkit：占位符 + vision 工具 + 包装适配器 + 证据记忆）
-- 通道与错误处理参考 [dsh-vision-proxy](https://github.com/Flyvhidbwo/dsh-vision-proxy)、[dsh-vision](https://github.com/william-jin-cmu/dsh-vision) 等社区插件的公共约定
+- Architecture and features inherited from the internal dsh-vision project (vision-toolkit: placeholders + vision tool + wrapper adapters + evidence memory)
+- Channel and error-handling conventions follow community plugins like [dsh-vision-proxy](https://github.com/Flyvhidbwo/dsh-vision-proxy) and [dsh-vision](https://github.com/william-jin-cmu/dsh-vision)
