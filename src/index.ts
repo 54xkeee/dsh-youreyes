@@ -703,6 +703,7 @@ export const __testing = Object.freeze({
 	visionCacheKey,
 	makeVisionRecord,
 	visionRecordText,
+	isVisionRecordMessage,
 	visionRecordsFromMessages,
 	findVisionRecord,
 	buildVisionManifest,
@@ -710,5 +711,9 @@ export const __testing = Object.freeze({
 	VisionPromiseCache,
 	installCompactionRehydration,
 	repairLegacyPlanningStream,
-	visionProviderName
+	visionProviderName,
+	openaiChat,
+	geminiGenerate,
+	ollamaChat,
+	detectOllama
 });
