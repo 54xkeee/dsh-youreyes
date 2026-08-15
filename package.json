@@ -1,7 +1,7 @@
 {
   "name": "dsh-youreyes",
   "version": "0.1.0",
-  "description": "Eyes for text-only DeepSeek: a vision toolkit that gives any DSH conversation image understanding via OpenAI-compatible VLM endpoints, Gemini API, or local Ollama — image placeholders, a model-invokable vision tool, multi-image OCR/region/compare modes, evidence memory, and a polished client panel.",
+  "description": "Eyes for text-only DeepSeek on DeepSeek Harness: image understanding via Antigravity IDE quota (default, flash/pro), OpenAI-compatible VLM endpoints, Gemini API, or local Ollama — model-invokable vision tool, wrapper adapters for deepseek/opencode-go, evidence memory, and a polished client panel.",
   "type": "module",
   "main": "lib/index.js",
   "types": "lib/types/index.d.ts",

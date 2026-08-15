@@ -1,13 +1,17 @@
 /**
- * dsh-youreyes — general vision channels.
+ * dsh-youreyes — vision channels.
  *
- * v0.1 targets portable, API-key based backends (no Antigravity/IDE dependency):
- *   - openai  : any OpenAI-compatible /chat/completions endpoint (image_url parts)
- *   - gemini  : Google Gemini Developer API (inline_data parts)
- *   - ollama  : local Ollama (auto-detected at http://localhost:11434/v1, keyless)
+ *   - openai      : any OpenAI-compatible /chat/completions endpoint (image_url parts)
+ *   - gemini      : Google Gemini Developer API (inline_data parts)
+ *   - ollama      : local Ollama (auto-detected at http://localhost:11434/v1, keyless)
+ *   - antigravity : Antigravity IDE agentapi (默认通道；flash/pro 双档，走 IDE 订阅额度)
  *
  * All channels speak one shape: given images [{b64, mime}] + prompt, return text.
  */
+
+import { execFile } from "node:child_process";
+import { mkdirSync, writeFileSync, unlinkSync, existsSync, statSync, openSync, readSync, closeSync } from "node:fs";
+import { join, dirname } from "node:path";
 
 export interface VisionImage {
 	b64: string;
@@ -247,5 +251,240 @@ export async function detectOllama(fetchImpl?: typeof fetch): Promise<string | n
 		}
 	} catch {
 		return null;
+	}
+}
+
+// ──────────────────────────────────────────────────────────────────────────
+// Antigravity IDE agentapi channel (反重力额度，flash/pro 双档)
+// 通过本机 Antigravity 语言服务器 agentapi 调用 Gemini，走 IDE 订阅额度。
+// 端口/CSRF 每次 IDE 重启都会变 → 动态发现；WSL 调 Windows exe → WSLENV 合并。
+// ──────────────────────────────────────────────────────────────────────────
+
+function abortableDelay(ms: number, signal?: AbortSignal) {
+	return new Promise<void>((resolveDelay, reject) => {
+		if (signal?.aborted) return reject(signal.reason || new Error("aborted"));
+		const timer = setTimeout(done, ms);
+		function done() {
+			signal?.removeEventListener("abort", aborted);
+			resolveDelay(undefined);
+		}
+		function aborted() {
+			clearTimeout(timer);
+			reject(signal.reason || new Error("aborted"));
+		}
+		signal?.addEventListener("abort", aborted, { once: true });
+	});
+}
+
+function imageExtension(mime: string) {
+	if (mime === "image/png") return ".png";
+	if (mime === "image/webp") return ".webp";
+	if (mime === "image/gif") return ".gif";
+	return ".jpg";
+}
+
+/** WSL 路径 → Windows file:// URI（agent 用 view_file 看图需要）。 */
+function windowsFileUri(wslPath: string) {
+	const match = String(wslPath).match(/^\/mnt\/([a-z])\/(.*)$/i);
+	if (!match) return `file://${encodeURI(wslPath)}`;
+	return `file:///${encodeURI(`${match[1].toUpperCase()}:/${match[2]}`).replace(":", "%3A")}`;
+}
+
+/** 从运行中的 LS 进程提取 gRPC 端口与 CSRF token（每次 IDE 重启都会变）。 */
+export async function findLs(signal?: AbortSignal) {
+	signal?.throwIfAborted();
+	const run = (cmd: string, args: string[], timeout = 15000) => new Promise<string>((resolveRun, reject) => {
+		execFile(cmd, args, { timeout, maxBuffer: 8 * 1024 * 1024, windowsHide: true, signal },
+			(error, stdout) => {
+				if (signal?.aborted) return reject(signal.reason || error);
+				resolveRun(String(stdout || ""));
+			});
+	});
+	// 1. 找 language_server.exe PID
+	const tl = await run("/mnt/c/Windows/System32/tasklist.exe", ["/FI", "IMAGENAME eq language_server.exe"]);
+	let pid: string | null = null;
+	for (const line of tl.split("\n")) {
+		if (line.includes("language_server.exe")) {
+			const parts = line.trim().split(/\s+/);
+			pid = parts[1] || null;
+			break;
+		}
+	}
+	if (!pid) return { port: null, csrf: null, error: "找不到 language_server.exe 进程。请先启动并登录 Antigravity IDE。" };
+	// 2. 该 PID 的 127.0.0.1 LISTENING 端口
+	const ns = await run("/mnt/c/Windows/System32/netstat.exe", ["-ano", "-p", "tcp"]);
+	const ports: string[] = [];
+	for (const line of ns.split("\n")) {
+		const parts = line.trim().split(/\s+/);
+		if (parts.length >= 5 && parts[0] === "TCP" && parts[3] === "LISTENING" && parts[4] === pid) {
+			const m = parts[1].match(/^127\.0\.0\.1:(\d+)$/);
+			if (m) ports.push(m[1]);
+		}
+	}
+	if (!ports.length) return { port: null, csrf: null, error: `language_server.exe PID ${pid} 没有监听 127.0.0.1 端口。` };
+	// 3. CSRF（进程命令行）
+	const csrfOut = await run("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+		["-NoProfile", "-Command",
+			`Get-CimInstance Win32_Process -Filter "ProcessId=${pid}" | Select-Object -ExpandProperty CommandLine`], 30000);
+	const m = csrfOut.match(/--csrf_token\s+([a-f0-9-]{20,})/);
+	const csrf = m ? m[1] : null;
+	// 4. Windows 侧 socket 探测 h2c gRPC 端口（回 SETTINGS 帧 type=0x04 的是 gRPC）
+	const probe = (
+		"$ports=@(" + ports.join(",") + ");" +
+		"foreach($p in $ports){" +
+		"  try{" +
+		"    $c=New-Object System.Net.Sockets.TcpClient;" +
+		"    $c.ReceiveTimeout=1500; $c.SendTimeout=1500;" +
+		"    $c.Connect('127.0.0.1',$p);" +
+		"    $s=$c.GetStream();" +
+		"    $pre=[byte[]](0x50,0x52,0x49,0x20,0x2a,0x20,0x48,0x54,0x54,0x50,0x2f,0x32,0x2e,0x30,0x0d,0x0a,0x0d,0x0a,0x53,0x4d,0x0d,0x0a,0x0d,0x0a);" +
+		"    $s.Write($pre,0,$pre.Length);" +
+		"    $buf=New-Object byte[] 9;" +
+		"    $n=$s.Read($buf,0,9);" +
+		"    if($n -ge 4 -and $buf[3] -eq 4){ Write-Output $p; $s.Close(); $c.Close(); break }" +
+		"    $s.Close(); $c.Close()" +
+		"  }catch{}" +
+		"}"
+	);
+	const probeOut = await run("/mnt/c/Windows/System32/WindowsPowerShell/v1.0/powershell.exe",
+		["-NoProfile", "-Command", probe], 30000);
+	for (const line of probeOut.split("\n")) {
+		const t = line.trim();
+		if (/^\d+$/.test(t)) return { port: Number(t), csrf, error: null };
+	}
+	return {
+		port: null,
+		csrf,
+		error: `已找到 language_server.exe PID ${pid} 和端口 ${ports.join(", ")}，但 h2c gRPC SETTINGS 探测全部失败。`
+	};
+}
+
+/** 确保本地项目文件存在（agentapi StartCascade 需要）。 */
+export async function ensureProjectFile(cfg: any) {
+	const home = cfg.antigravityWindowsHome;
+	if (!home || !cfg.antigravityProjectId) return { error: "未配置 antigravityWindowsHome / antigravityProjectId" };
+	const projPath = join(home, ".gemini", "config", "projects", `${cfg.antigravityProjectId}.json`);
+	if (existsSync(projPath)) return null;
+	try {
+		mkdirSync(dirname(projPath), { recursive: true });
+		const winDir = cfg.antigravityWorkspace.replace(/^\/mnt\/([a-z])/, (_: string, d: string) => `${d.toUpperCase()}:`).replace(/\//g, "\\");
+		const folderUri = "file:///" + winDir.replace(/\\/g, "/").replace(":", "%3A");
+		writeFileSync(projPath, JSON.stringify({
+			id: cfg.antigravityProjectId,
+			name: "dsh-youreyes",
+			projectResources: { resources: [{ gitFolder: { folderUri, allowWrite: true } }] }
+		}));
+	} catch (e: any) {
+		return { error: `创建项目文件失败: ${e.message}` };
+	}
+	return null;
+}
+
+/**
+ * 通道 antigravity: 官方 agentapi（反重力订阅额度）。
+ * 图片写入工作区 → file:// 引用 → agent 用 view_file 看图 → transcript 轮询回复。
+ * model 含 "pro" 用 pro 档，否则 flash 档。
+ */
+export async function runAntigravity(cfg: any, model: string, prompt: string, images: VisionImage[], signal?: AbortSignal) {
+	const imagePaths: string[] = [];
+	try {
+		signal?.throwIfAborted();
+		const wslDir = cfg.antigravityWorkspace;
+		if (!wslDir) return { error: "未配置 antigravityWorkspace（反重力工作区路径）" };
+		mkdirSync(wslDir, { recursive: true });
+		const stamp = `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+		const links = images.map((image, index) => {
+			const imageName = `dsh-youreyes-${stamp}-${index + 1}${imageExtension(image.mime)}`;
+			const imagePath = join(wslDir, imageName);
+			writeFileSync(imagePath, Buffer.from(image.b64, "base64"));
+			imagePaths.push(imagePath);
+			return `图片 ${index + 1}${(image as any).id ? `（attachment=${(image as any).id}）` : ""}: ![img${index + 1}](${windowsFileUri(imagePath)})`;
+		});
+
+		const { port, csrf, error: discoveryError } = await findLs(signal);
+		if (!port || !csrf) {
+			return { error: discoveryError || "找不到运行中的 Antigravity 语言服务器。请先启动并登录 Antigravity IDE。" };
+		}
+		const fullPrompt = `${prompt}\n\n${links.join("\n")}`;
+		const tier = model.includes("pro") ? "pro" : "flash";
+		const existingWslEnv = process.env.WSLENV || "";
+		const env = {
+			WSLENV: ["ANTIGRAVITY_LS_ADDRESS", "ANTIGRAVITY_CSRF_TOKEN", "ANTIGRAVITY_PROJECT_ID", existingWslEnv]
+				.filter(Boolean).join(":"),
+			ANTIGRAVITY_LS_ADDRESS: `http://127.0.0.1:${port}`,
+			ANTIGRAVITY_CSRF_TOKEN: csrf,
+			ANTIGRAVITY_PROJECT_ID: cfg.antigravityProjectId
+		};
+		const ensureProject = await ensureProjectFile(cfg);
+		if (ensureProject) return ensureProject;
+		const started = await new Promise<{ error?: string; stdout?: string }>((resolveStarted, reject) => {
+			execFile(cfg.antigravityLsExe, ["agentapi", "new-conversation", `--model=${tier}`, fullPrompt],
+				{ cwd: wslDir, env: { ...process.env, ...env }, timeout: 120000, maxBuffer: 4 * 1024 * 1024, windowsHide: true, signal },
+				(error, stdout, stderr) => {
+					if (signal?.aborted) return reject(signal.reason || error);
+					if (error) resolveStarted({ error: String(stderr || error.message).slice(0, 1200) });
+					else resolveStarted({ stdout: String(stdout) });
+				});
+		});
+		if (started.error) return { error: `agentapi new-conversation 失败: ${started.error}` };
+		let conversation: any;
+		try {
+			conversation = JSON.parse(started.stdout || "");
+		} catch {
+			return { error: `agentapi 输出异常: ${(started.stdout || "").slice(0, 500)}` };
+		}
+		if (conversation.error) return { error: `agentapi 错误: ${conversation.error}` };
+		const conversationId = conversation.response?.newConversation?.conversationId;
+		if (!conversationId) return { error: `未拿到 conversationId: ${JSON.stringify(conversation).slice(0, 500)}` };
+
+		const logDir = join(cfg.antigravityBrainDir, conversationId, ".system_generated", "logs");
+		const fullTranscript = join(logDir, "transcript_full.jsonl");
+		const compactTranscript = join(logDir, "transcript.jsonl");
+		const startedAt = Date.now();
+		let transcript = "";
+		let offset = 0;
+		let remainder = "";
+		while (Date.now() - startedAt < 240000) {
+			signal?.throwIfAborted();
+			try {
+				const nextTranscript = existsSync(fullTranscript)
+					? fullTranscript
+					: Date.now() - startedAt >= 8000 && existsSync(compactTranscript) ? compactTranscript : "";
+				if (!nextTranscript) throw new Error("transcript pending");
+				if (transcript !== nextTranscript) {
+					transcript = nextTranscript;
+					offset = 0;
+					remainder = "";
+				}
+				const size = statSync(transcript).size;
+				if (size < offset) { offset = 0; remainder = ""; }
+				if (size > offset) {
+					const length = size - offset;
+					const buffer = Buffer.alloc(length);
+					const fd = openSync(transcript, "r");
+					try { readSync(fd, buffer, 0, length, offset); } finally { closeSync(fd); }
+					offset = size;
+					const lines = (remainder + buffer.toString("utf8")).split("\n");
+					remainder = lines.pop() || "";
+					for (const line of lines) {
+						try {
+							const entry = JSON.parse(line);
+							if (entry.source === "MODEL" && entry.type === "PLANNER_RESPONSE" && entry.content?.trim()) {
+								return { text: entry.content.trim() };
+							}
+						} catch { /* 等待完整行 */ }
+					}
+				}
+			} catch { /* transcript 尚未出现 */ }
+			await abortableDelay(2000, signal);
+		}
+		return { error: "等待反重力回复超时" };
+	} catch (error) {
+		if (signal?.aborted) throw signal.reason || error;
+		return { error: String((error as any)?.message || error).slice(0, 1200) };
+	} finally {
+		for (const imagePath of imagePaths) {
+			try { unlinkSync(imagePath); } catch { /* ignore cleanup errors */ }
+		}
 	}
 }

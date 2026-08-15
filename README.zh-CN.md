@@ -20,7 +20,7 @@
 | 痛点 | dsh-youreyes 的解法 |
 |---|---|
 | DeepSeek 纯文本，粘贴图片直接被拒 | 包装适配器声明图片输入，图片自动转文本占位，不再报错 |
-| 别的识图插件只认自家 API | **任意 OpenAI 兼容端点** + Gemini + 本地 Ollama，你的 key 都能用 |
+| 别的识图插件只认自家 API | **反重力（默认）+ 任意 OpenAI 兼容端点** + Gemini + 本地 Ollama，你的 key 都能用 |
 | 配置麻烦、要注册一堆东西 | **本地 Ollama 零配置自动检测**；有 Gemini 免费 key 一行配置即可 |
 | 模型看到图但"忘了" | **视觉证据记忆**：识图结果写入会话，后续轮次可复用，压缩后自动恢复 |
 | 同一张图反复花钱识别 | **内容哈希缓存**：同图同问进程内只识别一次 |
@@ -45,6 +45,24 @@
 ```
 
 ## 🚀 快速开始
+
+### 方式零：反重力 IDE（默认通道，配置后优先）
+
+使用 [Antigravity IDE](https://antigravity.io)（已启动并登录）时，把它配为默认识图通道——识别走你的 **IDE 订阅额度**（flash/pro 双档，按模型名自动选择）：
+
+```yaml
+- insert:
+    - id: youreyes
+      name: dsh-youreyes
+      config:
+        antigravityWorkspace: /path/to/workspace
+        antigravityProjectId: your-project-id
+        antigravityLsExe: /path/to/language_server.exe
+        antigravityWindowsHome: /mnt/c/Users/you
+        antigravityBrainDir: /mnt/c/Users/you/.gemini/antigravity/brain
+```
+
+端口/CSRF 每次调用自动发现，IDE 重启也不用改配置；IDE 不可用时自动降级 Gemini → OpenAI → Ollama。
 
 ### 方式一：本地 Ollama（零配置，最省心）
 
@@ -113,8 +131,13 @@ EOF
 
 | Key | 默认 | 说明 |
 |---|---|---|
-| `defaultChannel` | `auto` | 面板默认通道：`auto` / `openai` / `gemini` / `ollama` |
+| `defaultChannel` | `auto` | 面板默认通道：`auto`（反重力优先）/ `antigravity` / `openai` / `gemini` / `ollama` |
 | `defaultModel` | `gemini-3.7-flash` | 面板默认模型 |
+| `antigravityWorkspace` | `""` | 反重力工作区（WSL 路径） |
+| `antigravityProjectId` | `""` | 反重力项目 id |
+| `antigravityLsExe` | `""` | `language_server.exe` 路径 |
+| `antigravityWindowsHome` | `""` | Windows 用户主目录（项目文件用） |
+| `antigravityBrainDir` | `""` | 反重力 brain transcript 目录 |
 | `openaiBaseUrl` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI 兼容端点（自动追加 `/chat/completions`） |
 | `openaiApiKey` | `""` | OpenAI 兼容端点 key（或环境变量 `YOUREYES_OPENAI_API_KEY`） |
 | `openaiModel` | `glm-4.6v-flash` | OpenAI 兼容端点模型 |
@@ -128,7 +151,7 @@ EOF
 | `timeoutMs` | `60000` | 单次请求超时 |
 | `maxImageBytes` | `8MB` | 单张图片上限 |
 | `maxImages` | `8` | 一次最多图片数 |
-| `visionUpstreams` | `["deepseek"]` | 对话流包装 provider 的上游列表 |
+| `visionUpstreams` | `["deepseek", "opencode-go"]` | 对话流包装 provider 的上游列表（deepseek 中转 + opencode-go 的 flash/pro 全系） |
 | `cacheMax` | `64` | 内存 LRU 缓存条数 |
 | `allowedImageDirs` | `[]` | 非空时仅允许 `image_path` 读取这些目录 |
 

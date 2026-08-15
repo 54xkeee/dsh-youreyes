@@ -20,7 +20,8 @@
 | Pain point | dsh-youreyes solution |
 |---|---|
 | DeepSeek is text-only; pasting an image is rejected | Wrapper adapters claim image input; images become text placeholders automatically |
-| Other vision plugins lock you into one vendor | **Any OpenAI-compatible endpoint** + Gemini + local Ollama — your key just works |
+| Other vision plugins lock you into one vendor | **Antigravity (default) + any OpenAI-compatible endpoint** + Gemini + local Ollama — your key just works |
+| Paying per image recognition | **Antigravity IDE quota by default** (flash/pro tiers) when the IDE is running; free local Ollama otherwise |
 | Setup is a chore with registrations everywhere | **Local Ollama auto-detection, zero config**; one line for a free Gemini key |
 | The model "forgets" what it saw | **Vision evidence memory**: results persist in the session, reused across turns, restored after compaction |
 | Paying to re-recognize the same image | **Content-hash cache**: same image + same question = recognized once per process |
@@ -31,6 +32,9 @@
 
 **Input**: an orange cat photo + *"What animal is this and what is it doing? Answer in Chinese."*
 
+**Output (Antigravity channel · flash tier — default)**:
+> 这是一只**橘猫**（橘色虎斑家猫）。它正仰面熟睡/惬意放松：四脚朝天、露出圆滚滚毛茸茸的肚子，正舒适地躺在深色床垫/毯子上睡觉。双眼闭合，前爪向上举起并露出了粉嫩的小肉垫，显得十分放松和安心。
+
 **Output (Gemini channel)**:
 > 这是一只橘色虎斑猫（橘猫）。它正四脚朝天、肚皮朝上地仰卧在黑色床单/毯子上安稳地睡觉，姿态非常放松惬意。
 
@@ -40,7 +44,7 @@
 ```
 you paste an image + ask
   → dsh-youreyes turns the image into a placeholder; DeepSeek (the brain) sees it
-  → DeepSeek calls the vision tool → a general VLM channel recognizes it
+  → DeepSeek calls the vision tool → Antigravity (default) / other VLM channels recognize it
   → text evidence flows back → DeepSeek continues the answer
 ```
 
@@ -57,6 +61,24 @@ dsh plugin --profile web add dsh-youreyes
 ```
 
 The plugin auto-detects a local Ollama at startup (`autoOllama: true` by default). **Images never leave your machine** — no key, no signup, no cost.
+
+### Path 0: Antigravity IDE (default when configured)
+
+If you use [Antigravity IDE](https://antigravity.io) (already running + logged in), configure it as the default recognition channel — recognition goes through your **IDE subscription quota** (flash/pro tiers, auto-selected by model name):
+
+```yaml
+- insert:
+    - id: youreyes
+      name: dsh-youreyes
+      config:
+        antigravityWorkspace: /path/to/workspace
+        antigravityProjectId: your-project-id
+        antigravityLsExe: /path/to/language_server.exe
+        antigravityWindowsHome: /mnt/c/Users/you
+        antigravityBrainDir: /mnt/c/Users/you/.gemini/antigravity/brain
+```
+
+Ports/CSRF are auto-discovered on every call — no manual config after IDE restarts. When the IDE is unavailable, the channel falls back to Gemini → OpenAI → Ollama automatically.
 
 ### Path 2: Gemini API (free tier, one line of config)
 
@@ -112,8 +134,13 @@ Text description back = channel is live. Errors? See Troubleshooting.
 
 | Key | Default | Description |
 |---|---|---|
-| `defaultChannel` | `auto` | Panel default: `auto` / `openai` / `gemini` / `ollama` |
-| `defaultModel` | `gemini-3.7-flash` | Panel default model |
+| `defaultChannel` | `auto` | Panel default: `auto` (Antigravity first) / `antigravity` / `openai` / `gemini` / `ollama` |
+| `defaultModel` | `gemini-3.7-flash` | Panel default model (name containing `pro` → Antigravity pro tier) |
+| `antigravityWorkspace` | `""` | Antigravity IDE workspace (WSL path) |
+| `antigravityProjectId` | `""` | Antigravity project id |
+| `antigravityLsExe` | `""` | Antigravity `language_server.exe` path |
+| `antigravityWindowsHome` | `""` | Windows home dir (for the project file) |
+| `antigravityBrainDir` | `""` | Antigravity brain transcript dir |
 | `openaiBaseUrl` | `https://open.bigmodel.cn/api/paas/v4` | OpenAI-compatible endpoint (`/chat/completions` appended) |
 | `openaiApiKey` | `""` | Endpoint key (or `YOUREYES_OPENAI_API_KEY` env) |
 | `openaiModel` | `glm-4.6v-flash` | Endpoint model |
@@ -127,7 +154,7 @@ Text description back = channel is live. Errors? See Troubleshooting.
 | `timeoutMs` | `60000` | Request timeout |
 | `maxImageBytes` | `8MB` | Per-image limit |
 | `maxImages` | `8` | Max images per call |
-| `visionUpstreams` | `["deepseek"]` | Upstream LLM providers to wrap for conversation vision |
+| `visionUpstreams` | `["deepseek", "opencode-go"]` | Upstream LLM providers to wrap for conversation vision (e.g. `deepseek-vision` + `deepseek-vision-opencode-go`) |
 | `cacheMax` | `64` | In-memory LRU cache size |
 | `allowedImageDirs` | `[]` | If set, `image_path` only reads these dirs |
 
@@ -135,6 +162,7 @@ Text description back = channel is live. Errors? See Troubleshooting.
 
 | Scenario | baseURL | Example models | Notes |
 |---|---|---|---|
+| **Antigravity IDE (default)** | (agentapi) | `gemini-3.7-flash` / `gemini-3.7-pro` | Uses your IDE quota; flash/pro tiers auto-selected; ports/CSRF auto-discovered |
 | **Local Ollama (auto)** | `http://127.0.0.1:11434` | `llama3.2-vision` / `llava` | Zero config, images stay local |
 | **Zhipu (free tier)** | `https://open.bigmodel.cn/api/paas/v4` | `glm-4.6v-flash` | Free tier, signup only |
 | **Qwen / DashScope** | `https://dashscope.aliyuncs.com/compatible-mode/v1` | `qwen3-vl-flash` | Cheap, fast, no rate limit |

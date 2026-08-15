@@ -87,9 +87,10 @@ function readImage(file: File) {
 	});
 }
 
-/** 通道预置：自动 / OpenAI 兼容 / Gemini / 本地 Ollama */
+/** 通道预置：自动（优先反重力）/ 反重力 / OpenAI 兼容 / Gemini / 本地 Ollama */
 const CHANNELS = [
 	{ value: "auto", labelKey: "chAuto", modelKey: "modelAuto" },
+	{ value: "antigravity", labelKey: "chAntigravity", modelKey: "modelAntigravity" },
 	{ value: "openai", labelKey: "chOpenai", modelKey: "modelOpenai" },
 	{ value: "gemini", labelKey: "chGemini", modelKey: "modelGemini" },
 	{ value: "ollama", labelKey: "chOllama", modelKey: "modelOllama" }
@@ -245,12 +246,14 @@ const zh = {
 	"hintPaste": "选择图片，或直接 Ctrl+V 粘贴截图",
 	"defaultPrompt": "请用中文详细描述图片内容。",
 	"channel": "通道",
-	"chAuto": "自动",
+	"chAuto": "自动 (反重力优先)",
+	"chAntigravity": "反重力 (flash/pro)",
 	"chOpenai": "OpenAI 兼容",
 	"chGemini": "Gemini API",
 	"chOllama": "本地 Ollama",
 	"modelHint": "模型",
 	"modelAuto": "自动",
+	"modelAntigravity": "gemini-3.7-flash",
 	"modelOpenai": "glm-4.6v-flash",
 	"modelGemini": "gemini-3.7-flash",
 	"modelOllama": "llava",
@@ -286,12 +289,14 @@ const en = {
 	"hintPaste": "Pick images or press Ctrl+V to paste screenshots",
 	"defaultPrompt": "Describe the image content in detail.",
 	"channel": "Channel",
-	"chAuto": "Auto",
+	"chAuto": "Auto (Antigravity first)",
+	"chAntigravity": "Antigravity (flash/pro)",
 	"chOpenai": "OpenAI-compatible",
 	"chGemini": "Gemini API",
 	"chOllama": "Local Ollama",
 	"modelHint": "Model",
 	"modelAuto": "auto",
+	"modelAntigravity": "gemini-3.7-flash",
 	"modelOpenai": "glm-4.6v-flash",
 	"modelGemini": "gemini-3.7-flash",
 	"modelOllama": "llava",

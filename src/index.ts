@@ -24,18 +24,19 @@ import {
 	flattenMessageContent,
 	repairLegacyPlanningStream
 } from "./vision-core.ts";
-import { openaiChat, geminiGenerate, ollamaChat, detectOllama } from "./channels.ts";
+import { openaiChat, geminiGenerate, ollamaChat, detectOllama, runAntigravity } from "./channels.ts";
 
 /**
  * dsh-youreyes — server half.
  *
- * 给纯文本 DSH 模型一双眼睛。图片经通用视觉通道（OpenAI 兼容 / Gemini / 本地
- * Ollama）理解后，把文字证据送回对话流，DeepSeek 仍然是大脑。
+ * 给纯文本 DSH 模型一双眼睛。图片经视觉通道（反重力 / OpenAI 兼容 / Gemini /
+ * 本地 Ollama）理解后，把文字证据送回对话流，DeepSeek 仍然是大脑。
  *
- * v0.1 通道（不依赖任何 IDE/反重力）：
- *   - openai : 任意 OpenAI 兼容 /chat/completions（智谱、通义、OpenRouter、vLLM…）
- *   - gemini : Google Gemini Developer API（AIza… 或 AQ. 新格式 key）
- *   - ollama : 本地 Ollama（零配置自动检测，图片不出本机）
+ * 通道（auto 优先 antigravity）：
+ *   - antigravity : Antigravity IDE agentapi（默认；flash/pro 双档，走 IDE 订阅额度）
+ *   - openai      : 任意 OpenAI 兼容 /chat/completions（智谱、通义、OpenRouter、vLLM…）
+ *   - gemini      : Google Gemini Developer API（AIza… 或 AQ. 新格式 key）
+ *   - ollama      : 本地 Ollama（零配置自动检测，图片不出本机）
  *
  * 特色（继承自 vision-toolkit）：
  *   1) 包装适配器：每个上游 LLM 注册一个带识图能力的 provider，图片块→文本占位
@@ -57,14 +58,21 @@ function visionProviderName(upstreamProvider: string) {
 
 /** 通道配置：每个通道可独立设置 baseURL / apiKey / model。 */
 export const Config = z.object({
-	// 面板与 /api/youreyes/vision 的默认通道与模型
+	// 面板与 /api/youreyes/vision 的默认通道与模型（auto 优先 antigravity）
 	defaultChannel: z.union([
 		z.const("auto"),
+		z.const("antigravity"),
 		z.const("openai"),
 		z.const("gemini"),
 		z.const("ollama")
 	]).default("auto"),
 	defaultModel: z.string().default("gemini-3.7-flash"),
+	// Antigravity IDE agentapi 通道（默认识图通道；flash/pro 双档，走 IDE 订阅额度）
+	antigravityWorkspace: z.string().default(""),
+	antigravityProjectId: z.string().default(""),
+	antigravityLsExe: z.string().default(""),
+	antigravityWindowsHome: z.string().default(""),
+	antigravityBrainDir: z.string().default(""),
 	// OpenAI 兼容通道（智谱 / 通义 / OpenRouter / 本地 vLLM…）
 	openaiBaseUrl: z.string().default("https://open.bigmodel.cn/api/paas/v4"),
 	openaiApiKey: z.string().default(""),
@@ -84,7 +92,8 @@ export const Config = z.object({
 	maxImageBytes: z.number().default(8 * 1024 * 1024),
 	maxImages: z.number().default(8),
 	// vision-toolkit: 每个上游各注册一个识图包装 provider（对话流识图）
-	visionUpstreams: z.array(z.string()).default(["deepseek"]),
+	// 默认包装 deepseek（中转）与 opencode-go（flash/pro 双档）
+	visionUpstreams: z.array(z.string()).default(["deepseek", "opencode-go"]),
 	// 视觉结果内存 LRU 与会话清单上限
 	cacheMax: z.number().default(64),
 	manifestMax: z.number().default(12),
@@ -155,6 +164,9 @@ async function runVisionChannel(cfg: any, channel: string, model: string, prompt
 	const timeoutSignal = AbortSignal.timeout(cfg.timeoutMs || 60000);
 	const mergedSignal = signal ? AbortSignal.any([signal, timeoutSignal]) : timeoutSignal;
 	try {
+		if (channel === "antigravity") {
+			return await runAntigravity(cfg, model, prompt, images, mergedSignal);
+		}
 		if (channel === "openai") {
 			const text = await openaiChat({
 				...common,
@@ -191,6 +203,14 @@ async function runVisionChannel(cfg: any, channel: string, model: string, prompt
 		if (signal?.aborted) throw signal.reason || error;
 		return { error: String(error?.message || error).slice(0, 1200) };
 	}
+}
+
+/** auto 通道解析：优先 antigravity（默认通道）→ gemini → openai → ollama。 */
+function resolveAutoChannel(cfg: any) {
+	if (cfg.antigravityWorkspace && cfg.antigravityProjectId && cfg.antigravityLsExe) return "antigravity";
+	if (cfg.geminiApiKey) return "gemini";
+	if (cfg.openaiApiKey) return "openai";
+	return "ollama";
 }
 
 /** auto 档位：先 standard triage，复杂画面自动升级 deep。 */
@@ -382,9 +402,7 @@ function registerVisionTool(ctx: any, cfg: any) {
 		}
 
 		const channel = args.channel || cfg.defaultChannel || "auto";
-		const resolvedChannel = channel === "auto"
-			? (cfg.geminiApiKey ? "gemini" : cfg.openaiApiKey ? "openai" : "ollama")
-			: channel;
+		const resolvedChannel = channel === "auto" ? resolveAutoChannel(cfg) : channel;
 		const model = args.model || cfg.defaultModel || VISION_MODEL;
 		const key = visionCacheKey({
 			attachmentIds: images.map((image) => image.id),
@@ -414,7 +432,11 @@ function registerVisionTool(ctx: any, cfg: any) {
 		const { result, cacheHit } = await cachedVision(key, cfg.cacheMax, async () => {
 			let outcome = await runAdaptiveVision(cfg, resolvedChannel, model, detail, mode, prompt, region, images, exec.signal);
 			let usedChannel = resolvedChannel;
-			if (outcome.error && resolvedChannel !== "gemini" && cfg.geminiApiKey) {
+			// 降级链：antigravity → gemini → openai
+			if (outcome.error && resolvedChannel === "antigravity" && cfg.geminiApiKey) {
+				outcome = await runAdaptiveVision(cfg, "gemini", VISION_MODEL, detail, mode, prompt, region, images, exec.signal);
+				usedChannel = "gemini-fallback";
+			} else if (outcome.error && resolvedChannel !== "gemini" && resolvedChannel !== "antigravity" && cfg.geminiApiKey) {
 				outcome = await runAdaptiveVision(cfg, "gemini", VISION_MODEL, detail, mode, prompt, region, images, exec.signal);
 				usedChannel = "gemini-fallback";
 			} else if (outcome.error && resolvedChannel !== "openai" && cfg.openaiApiKey) {
@@ -474,7 +496,7 @@ function registerVisionTool(ctx: any, cfg: any) {
 			detail: { type: "string", enum: ["auto", "fast", "standard", "deep"], description: "思考档位，默认 auto" },
 			mode: { type: "string", enum: ["glance", "ocr", "region", "compare"], description: "任务模式，默认 glance" },
 			region: { type: "string", description: "region 模式的区域，例如归一化坐标 0.1,0.2,0.8,0.9，或自然语言区域" },
-			channel: { type: "string", enum: ["auto", "openai", "gemini", "ollama"], description: "识图通道，默认 auto" },
+			channel: { type: "string", enum: ["auto", "antigravity", "openai", "gemini", "ollama"], description: "识图通道，默认 auto（优先反重力）" },
 			model: { type: "string", description: "识图模型，默认取配置 defaultModel" }
 		},
 		output: {
@@ -638,9 +660,7 @@ export function apply(ctx: any, config: any) {
 				if (mode === "region" && !region) return send(400, { error: "region 模式需要 region" });
 				const requestedChannel = body.channel || cfg.defaultChannel || "auto";
 				const autoChannel = requestedChannel === "auto";
-				const channel = autoChannel
-					? (cfg.geminiApiKey ? "gemini" : cfg.openaiApiKey ? "openai" : "ollama")
-					: requestedChannel;
+				const channel = autoChannel ? resolveAutoChannel(cfg) : requestedChannel;
 				const model = body.model || cfg.defaultModel || VISION_MODEL;
 				const key = visionCacheKey({
 					attachmentIds: images.map((image) => image.id),
@@ -715,5 +735,6 @@ export const __testing = Object.freeze({
 	openaiChat,
 	geminiGenerate,
 	ollamaChat,
-	detectOllama
+	detectOllama,
+	runAntigravity
 });
