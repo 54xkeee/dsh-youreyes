@@ -48,6 +48,74 @@ you paste an image + ask
   → text evidence flows back → DeepSeek continues the answer
 ```
 
+## 🧠 The vision engine — how complex recognition actually works
+
+A naive "see → describe" loop fails on dense screenshots, tables, UI mockups and multi-image comparisons. dsh-youreyes turns recognition into a **structured, self-escalating, memory-backed pipeline**:
+
+### 1. Auto detail escalation — it knows when one pass isn't enough
+
+`detail: auto` runs a **two-pass strategy**:
+
+```
+pass 1 (standard + triage) ──▶ complexity == "simple" ──▶ done
+                            └─▶ complexity == "complex" ──▶ pass 2 (deep) ──▶ escalated result
+```
+
+The vision model itself classifies complexity. These all count as **complex** and trigger the deep pass automatically:
+
+- multi-subject relationships · dense small text · OCR-heavy content
+- tables / charts / code / UI screens · counting · comparison / spot-the-difference
+- professional imagery · multi-step spatial reasoning
+
+The response carries an `escalated` flag so you always know which pass answered.
+
+### 2. Four task modes, one tool
+
+| Mode | What it does | Typical use |
+|---|---|---|
+| `glance` | general understanding, evidence selected around your question | everyday questions |
+| `ocr` | transcribes visible text in natural reading order, preserving headings/tables/UI hierarchy | screenshots, docs, error messages |
+| `region` | focuses on one area — normalized coords `0.1,0.2,0.8,0.9` **or** plain language (`"top right"`) | UI bugs, chart details |
+| `compare` | item-by-item differences between ≥2 images, with confidence | before/after, versions, A/B |
+
+### 3. Structured evidence, not raw prose
+
+Every pass asks the VLM for a **strict JSON evidence object**:
+
+```json
+{
+  "complexity": "simple|complex",
+  "base_evidence": {
+    "summary": "neutral overview",
+    "ocr": "visible text (empty if none)",
+    "layout": ["layout observations"],
+    "entities": ["entities"],
+    "relations": ["relations"],
+    "uncertainty": ["explicit unknowns"]
+  },
+  "query_answer": "direct answer to the user"
+}
+```
+
+Observations vs. inference are separated, uncertainty is made explicit (never hallucinated), and every list is capped (≤8 items, ≤160 chars) to keep the context tight.
+
+### 4. Long-context visual memory — the model never "forgets" what it saw
+
+This is the part that makes recognition useful **across turns**:
+
+- Every result is written into the **session timeline** as a durable `<dsh-youreyes-evidence>` record (a plugin notice message), not just returned once.
+- **Reuse across turns**: the same image + same question hits the existing record — recognized once, remembered forever.
+- **Vision memory manifest**: every request stream carries a compact catalog of recent evidence (`attachment=… | mode=… | detail=… | summary`), so the model can follow up — zoom in on a region, re-OCR, compare against a new screenshot — without you re-pasting anything.
+- **Compaction rehydration**: after DSH compresses a long session, the most recent vision records are **restored automatically** — memory survives summarization.
+
+### 5. Content-hash caching — never pay twice for the same pixels
+
+Cache key = `SHA-256(image bytes) + prompt + detail + mode + region + model + channel + prompt-version`. An in-process LRU (64 entries) means the same image asked the same way is recognized **at most once per process** — even across conversations.
+
+### 6. Stream repair for flaky upstreams
+
+`repairLegacyPlanningStream` re-labels pre-tool planning that some OpenAI-compatible DeepSeek routes misreport as text — so tool-calling flows stay clean on every backend.
+
 ## 🚀 Quick start
 
 ### Path 1: Local Ollama (zero config, most private)
