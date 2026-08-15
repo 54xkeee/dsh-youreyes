@@ -20,6 +20,7 @@
     "lib",
     "src",
     "README.md",
+    "README.zh-CN.md",
     "LICENSE"
   ],
   "keywords": [
@@ -46,7 +47,8 @@
   },
   "scripts": {
     "build": "node build.mjs",
-    "test": "node --test tests/*.test.mjs"
+    "test": "node --test tests/*.test.mjs",
+    "prepublishOnly": "node build.mjs && npm test"
   },
   "devDependencies": {
     "@deepseek-ai/dsh-llm": "0.1.0-rc.6",
@@ -61,6 +63,10 @@
   "repository": {
     "type": "git",
     "url": "git+https://github.com/54xkeee/dsh-youreyes.git"
+  },
+  "homepage": "https://github.com/54xkeee/dsh-youreyes",
+  "bugs": {
+    "url": "https://github.com/54xkeee/dsh-youreyes/issues"
   },
   "allowScripts": {
     "esbuild@0.24.2": true
